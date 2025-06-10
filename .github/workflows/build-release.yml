@@ -1,0 +1,56 @@
+name: Create C Program Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Triggers on tags like v1.2.3
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build-essential (get GCC, make, etc.)
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+
+      - name: Check GCC version
+        run: gcc --version
+
+      - name: Extract Project Name, Version, and Architecture
+        id: extract_vars
+        run: |
+          NAME=$(grep '#define NAME' main.c | cut -d '"' -f 2)
+          VERSION=$(grep '#define VERSION' main.c | cut -d '"' -f 2)
+          ARCH=$(uname -m)
+          echo "Binary will be named: $NAME"
+          echo "Version from source is: $VERSION"
+          echo "Detected architecture: $ARCH"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
+
+      - name: Build C binary for Linux
+        run: gcc -O2 -Wall main.c -o ${{ steps.extract_vars.outputs.name }}
+
+      - name: Create Release Assets Package
+        run: |
+          ASSET_DIR=${{ steps.extract_vars.outputs.name }}-${{ steps.extract_vars.outputs.version }}-${{ steps.extract_vars.outputs.arch }}
+          ASSET_ARCHIVE=${ASSET_DIR}.tar.gz
+
+          mkdir -p ${ASSET_DIR}
+          cp ${{ steps.extract_vars.outputs.name }} ${ASSET_DIR}/
+          tar -czvf ${ASSET_ARCHIVE} -C ${ASSET_DIR} .
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${{ steps.extract_vars.outputs.name }},${{ steps.extract_vars.outputs.name }}-${{ steps.extract_vars.outputs.version }}-${{ steps.extract_vars.outputs.arch }}.tar.gz"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generateReleaseNotes: true
