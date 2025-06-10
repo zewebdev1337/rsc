@@ -1,0 +1,3 @@
+#!/bin/bash
+
+gcc -Os -s main.c -o rsc
